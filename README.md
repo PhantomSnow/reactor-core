@@ -117,6 +117,74 @@ Reproduce with `benchmarks/wrk_benchmark.sh` (uses the bundled `echo_bench` clie
 [wrk](https://github.com/wg/wrk)). `echo_bench` is a separate raw-epoll client, so the library
 is not benchmarked with itself.
 
+### Results on a 16-CPU WSL2 machine
+
+A second set of runs on my own machine: WSL2 (Hyper-V) with 16 logical CPUs, same Release build.
+
+**Single core** (server pinned to CPU 0, load generator to CPU 1, 10 s runs):
+
+| Workload | Connections | Throughput | Latency |
+|---|---:|---:|---:|
+| Echo ping-pong, 64 B (`echo_bench`) | 100 | 158K round-trips/s | p50 0.59 ms, p99 1.3 ms |
+| Echo ping-pong, 64 B (`echo_bench`) | 10,000 | 108K round-trips/s | p50 95 ms, p99 130 ms |
+| HTTP/1.1 keep-alive (`wrk -t1 -c100`) | 100 | 140K req/s | avg 0.39 ms |
+
+**Scaling with I/O threads** (server on CPUs 0–8, `wrk -t7 -c400 -d10s` on CPUs 9–15):
+
+| I/O threads | HTTP req/s | Avg latency |
+|---:|---:|---:|
+| 1 | 36K | 11.0 ms |
+| 2 | 123K | 3.2 ms |
+| 4 | 327K | 1.2 ms |
+| 8 | **674K** | 0.43 ms |
+
+The 1- and 2-thread rows are depressed by a benchmark effect explained below, so this table is
+not a clean speed-up curve; the 8-thread figure is the meaningful one.
+
+### Investigating the 1-thread anomaly
+
+With one I/O thread the server did 140K req/s under `wrk -t1 -c100` but only 36K under
+`wrk -t7 -c400`. I changed one variable at a time:
+
+| Experiment | Result | Conclusion |
+|---|---:|---|
+| Server pinned to a single CPU, `wrk -t7 -c400` | 42K | not caused by CPU migration |
+| Server on CPUs 0–8, `wrk -t1 -c100` | 137K | the load shape matters |
+| Original setup run twice in a row | 47K, 41K | not a warm-up effect |
+
+Splitting the load shape (server pinned to CPU 0) and counting the server's voluntary context
+switches over each 10 s run:
+
+| wrk | req/s | Voluntary context switches | Per request |
+|---|---:|---:|---:|
+| `-t1 -c100` | 136K | 32,188 | 0.024 |
+| `-t1 -c400` | 136K | 15,782 | 0.012 |
+| `-t7 -c100` | 52K | 721 | 0.0001 |
+| `-t7 -c400` | 53K | 594 | 0.0001 |
+
+The slowdown depends only on the number of **client threads**, not on the number of connections.
+My first hypothesis was that scattered requests made the server sleep and wake once per request;
+the data rules that out: in the slow case the server almost never sleeps and is 100% busy.
+
+Reading the server's CPU time from `/proc/<pid>/stat`:
+
+| wrk | req/s | User time per request | Kernel time per request |
+|---|---:|---:|---:|
+| `-t1 -c100` | 143K | ~0.5 µs | ~5.9 µs |
+| `-t7 -c100` | 47K | ~1.1 µs | **~20 µs** |
+
+Over 90% of the server's time is in the kernel in both cases, and the extra cost per request is
+almost entirely kernel time, not tinynet code. My working explanation: over loopback, the
+sender's `send()` runs the receiver's TCP receive path on the sender's CPU and wakes the receiving
+thread. With one busy wrk thread there is rarely anyone to wake; with seven mostly-idle wrk
+threads, nearly every response must wake a sleeping thread on another CPU, and cross-CPU wakeups
+are expensive inside a Hyper-V guest. I could not confirm this directly: the `RES`
+(rescheduling IPI) counter in `/proc/interrupts` barely moved, most likely because Hyper-V
+delivers these interrupts through its own mechanism, and `perf` is not available in WSL2.
+
+Takeaways: single-thread results should be read with `wrk -t1`, and the multi-thread numbers above
+are conservative, since every I/O thread also pays this client-side wakeup cost.
+
 ## Design notes
 
 **Level-triggered epoll.** LT keeps notifying while a fd is ready, so a partial read can never
