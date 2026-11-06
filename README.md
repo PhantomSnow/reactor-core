@@ -5,7 +5,8 @@
 [muduo](https://github.com/chenshuo/muduo) and the core of servers like Nginx and Redis).
 It has no dependencies beyond the C++ standard library and pthreads.
 
-- **~172K echo round-trips/s and ~143K HTTP req/s on a single core**, 10,000 concurrent connections
+- **~158K echo round-trips/s and ~140K HTTP req/s on a single core**; 10,000 concurrent connections;
+  **~674K HTTP req/s with 8 I/O threads**
 - Main/sub Reactor: one acceptor loop + N I/O loops with round-robin connection assignment
 - `eventfd` cross-thread wakeup, `timerfd`-based timer queue, `readv`-based I/O buffer
 - Safe connection lifetime via `shared_ptr` + `weak_ptr` tie, no locks on the per-connection hot path
@@ -96,38 +97,18 @@ int main() {
 
 ## Performance
 
-Measured on a 2-vCPU Linux VM (GCC 13, `-O3` Release build), server pinned to CPU 0 and
-load generator pinned to CPU 1 with `taskset`, so each side gets exactly one core.
-Each number is a 10-second run after a 1-second warm-up; the first row is the mean of three runs
-(171.4K / 172.9K / 172.3K).
+Measured on WSL2 (Hyper-V) with 16 logical CPUs, `-O3` Release build, 10-second runs.
 
-| Workload | Connections | Throughput | p50 | p99 |
-|---|---:|---:|---:|---:|
-| Echo ping-pong, 64 B | 100 | **172K round-trips/s** | 0.52 ms | 1.4 ms |
-| Echo ping-pong, 64 B | 1,000 | 156K round-trips/s | 5.7 ms | 14.2 ms |
-| Echo ping-pong, 64 B | 10,000 | 127K round-trips/s | 79 ms | 124 ms |
-| Echo ping-pong, 16 KB | 100 | 133K round-trips/s (**~4.1 GiB/s** both directions) | 0.73 ms | 1.6 ms |
-| HTTP/1.1 keep-alive (`wrk -t1 -c100`) | 100 | **~143K req/s**, 0 errors | 0.34 ms | 1.2–1.6 ms |
-
-Latency grows with connection count as Little's law predicts (10,000 in flight ÷ 127K/s ≈ 79 ms);
-throughput stays high. With only two cores, a single server core is the honest configuration;
-on a larger machine raise `io_threads` and `SERVER_CPUS` to measure multi-core scaling.
-
-Reproduce with `benchmarks/wrk_benchmark.sh` (uses the bundled `echo_bench` client and
-[wrk](https://github.com/wg/wrk)). `echo_bench` is a separate raw-epoll client, so the library
-is not benchmarked with itself.
-
-### Results on a 16-CPU WSL2 machine
-
-A second set of runs on my own machine: WSL2 (Hyper-V) with 16 logical CPUs, same Release build.
-
-**Single core** (server pinned to CPU 0, load generator to CPU 1, 10 s runs):
+**Single core** (server pinned to CPU 0, load generator pinned to CPU 1 with `taskset`):
 
 | Workload | Connections | Throughput | Latency |
 |---|---:|---:|---:|
-| Echo ping-pong, 64 B (`echo_bench`) | 100 | 158K round-trips/s | p50 0.59 ms, p99 1.3 ms |
+| Echo ping-pong, 64 B (`echo_bench`) | 100 | **158K round-trips/s** | p50 0.59 ms, p99 1.3 ms |
 | Echo ping-pong, 64 B (`echo_bench`) | 10,000 | 108K round-trips/s | p50 95 ms, p99 130 ms |
-| HTTP/1.1 keep-alive (`wrk -t1 -c100`) | 100 | 140K req/s | avg 0.39 ms |
+| HTTP/1.1 keep-alive (`wrk -t1 -c100`) | 100 | **140K req/s** | avg 0.39 ms |
+
+Latency grows with connection count as Little's law predicts (10,000 in flight ÷ 108K/s ≈ 93 ms,
+measured p50 95 ms); throughput stays high.
 
 **Scaling with I/O threads** (server on CPUs 0–8, `wrk -t7 -c400 -d10s` on CPUs 9–15):
 
@@ -140,6 +121,10 @@ A second set of runs on my own machine: WSL2 (Hyper-V) with 16 logical CPUs, sam
 
 The 1- and 2-thread rows are depressed by a benchmark effect explained below, so this table is
 not a clean speed-up curve; the 8-thread figure is the meaningful one.
+
+Reproduce with `benchmarks/wrk_benchmark.sh` (uses the bundled `echo_bench` client and
+[wrk](https://github.com/wg/wrk)). `echo_bench` is a separate raw-epoll client, so the library
+is not benchmarked with itself.
 
 ### Investigating the 1-thread anomaly
 
