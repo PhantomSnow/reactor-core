@@ -7,7 +7,7 @@ Add one entry each time AI meaningfully shapes code, tests, seeds or docs.
 
 | Tool | Used for |
 | --- | --- |
-| Claude | |
+| Claude | Proposal, planning, test strategy, test code, coverage measurement |
 | | |
 
 ## Log
@@ -23,6 +23,16 @@ Add one entry each time AI meaningfully shapes code, tests, seeds or docs.
 - **Verification:** How did you check it was correct? (ran under ASan, failed at first, compared with spec, reviewed by hand ...)
 - **What you had to fix:**
 - **Good prompt candidate for the report?** yes / no
+
+### 2026-11-26 — Buffer unit tests B-01..B-14 (#4)
+
+- **Tool:** Claude
+- **Task:** Write the 14 Buffer test cases defined in the test strategy
+- **Prompt:** "go #4 的 Buffer 測試" (after the test strategy listing B-01..B-14 had been reviewed)
+- **Output used:** `tests/buffer_test.cpp` (14 new tests)
+- **Verification:** all 20 tests pass under ASan and UBSan; coverage re-measured (all reachable `Buffer.cpp` branches covered); mutation check: changing `<` to `<=` in `make_space` is caught by B-06 but not by the 6 original tests
+- **What you had to fix:** nothing in the tests; gcovr run from inside the repo left a stray `.gcov` file, so `*.gcov`/`*.gcda`/`*.gcno` were added to `.gitignore`
+- **Good prompt candidate for the report?** no
 
 ## LLM seed experiment (optional AI theme)
 

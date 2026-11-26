@@ -10,3 +10,8 @@ temp/echo_raw
 *.o
 *.a
 *.so
+
+# coverage artifacts
+*.gcov
+*.gcda
+*.gcno
