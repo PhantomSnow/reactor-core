@@ -84,13 +84,20 @@ To confirm the new tests detect real defects, not just raise coverage, the grow-
 
 _To be filled in by #11._
 
+## Note on multi-threaded coverage counters
+
+The first CI run failed with `NegativeHitsError` on `TcpConnection.cpp`: gcov's counters are plain
+increments, so two I/O threads updating the same counter at once can corrupt it. All measurements
+from #6 on use `-fprofile-update=atomic`, which makes the counter updates atomic. Re-measuring with
+it gives the same two modes as before (316 or 333-334 library branches), so the earlier numbers stand.
+
 ## How to reproduce
 
 ```bash
 git archive baseline | tar -x -C /tmp/cov-src        # or use the current checkout
 cmake -S /tmp/cov-src -B /tmp/cov-build -DCMAKE_BUILD_TYPE=Debug \
       -DTINYNET_BUILD_EXAMPLES=OFF -DTINYNET_BUILD_BENCHMARKS=OFF \
-      -DCMAKE_CXX_FLAGS="--coverage -O0" -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+      -DCMAKE_CXX_FLAGS="--coverage -O0 -fprofile-update=atomic" -DCMAKE_EXE_LINKER_FLAGS="--coverage"
 cmake --build /tmp/cov-build -j
 (cd /tmp/cov-build && ctest)
 pip install gcovr
