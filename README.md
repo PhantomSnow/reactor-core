@@ -1,5 +1,7 @@
 # tinynet — a multi-threaded Reactor network library in C++17
 
+[![CI](https://github.com/PhantomSnow/reactor-core/actions/workflows/ci.yml/badge.svg)](https://github.com/PhantomSnow/reactor-core/actions/workflows/ci.yml)
+
 `tinynet` is a from-scratch, non-blocking TCP networking library for Linux, built on
 `epoll` using the **one-loop-per-thread** Reactor pattern (the same architecture as
 [muduo](https://github.com/chenshuo/muduo) and the core of servers like Nginx and Redis).

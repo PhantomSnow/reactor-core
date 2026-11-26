@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: build + test (${{ matrix.compiler }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: gcc
+            cc: gcc
+            cxx: g++
+          - compiler: clang
+            cc: clang
+            cxx: clang++
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+      - name: Build (library, tests, examples, benchmarks)
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  sanitizers:
+    name: sanitizer (${{ matrix.sanitizer }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined]
+    env:
+      CC: clang
+      CXX: clang++
+      ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+    steps:
+      - uses: actions/checkout@v4
+      # Newer kernels randomize mmap with more bits than older sanitizer runtimes expect.
+      - name: Lower mmap randomization for sanitizers
+        run: sudo sysctl vm.mmap_rnd_bits=28
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+          -DTINYNET_SANITIZER=${{ matrix.sanitizer }}
+          -DTINYNET_BUILD_EXAMPLES=OFF -DTINYNET_BUILD_BENCHMARKS=OFF
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install gcovr
+        run: pipx install gcovr
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+          -DTINYNET_BUILD_EXAMPLES=OFF -DTINYNET_BUILD_BENCHMARKS=OFF
+          -DCMAKE_CXX_FLAGS="--coverage -O0" -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Coverage report
+        run: |
+          mkdir -p coverage
+          GCOVR="gcovr -r . build --filter src/ --filter include/ --exclude-throw-branches --exclude-unreachable-branches"
+          $GCOVR --html-details coverage/index.html --txt coverage/summary.txt --txt-metric branch
+          {
+            echo "## Branch coverage (library only)"
+            echo '```'
+            cat coverage/summary.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat coverage/summary.txt
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
