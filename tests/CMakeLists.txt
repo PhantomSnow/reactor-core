@@ -4,6 +4,7 @@ set(TINYNET_TESTS
     channel_test
     eventloop_test
     tcp_server_test
+    timer_test
 )
 
 foreach(test_name IN LISTS TINYNET_TESTS)
