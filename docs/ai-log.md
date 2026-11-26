@@ -44,6 +44,16 @@ Add one entry each time AI meaningfully shapes code, tests, seeds or docs.
 - **What you had to fix:** the EventLoop API cannot create timers with exactly the same expiry, so T-03 and T-06 drive a `TimerQueue` directly. Repeated measurement showed the library total varies between runs (TcpConnection timing), so single-run totals were replaced by per-mode comparisons
 - **Good prompt candidate for the report?** no
 
+### 2026-11-26 — Buffer fuzzer (#7)
+
+- **Tool:** Claude
+- **Task:** Write a libFuzzer harness for Buffer with a reference model, add it to CMake and CI
+- **Prompt:** "開始第7步吧" (start step 7)
+- **Output used:** `fuzz/buffer_fuzzer.cpp`, `fuzz/CMakeLists.txt`, `CMakeLists.txt` (`TINYNET_BUILD_FUZZERS`), fuzz job in `ci.yml`, `docs/fuzzing.md`
+- **Verification:** the fuzzer itself rejected the first version: the AI-written invariant `len <= W + P - 8` underflows when P < 8 and reported a false crash after 1 228 runs. Diagnosed by replaying the crash input with extra logging; Buffer was correct, the harness was fixed. Then 6.5 M executions without findings, and the `<`/`<=` mutant was detected in under a second
+- **What you had to fix:** the unsigned-underflow bug in the AI-written harness (kept as a regression input)
+- **Good prompt candidate for the report?** no, but a good **verification** example: AI-written test code can itself be wrong
+
 ## LLM seed experiment (optional AI theme)
 
 | Harness | Seed set | Corpus size | Coverage @10 min | Coverage @60 min |
