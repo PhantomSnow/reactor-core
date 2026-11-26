@@ -26,6 +26,27 @@ Observation: line coverage is already high at baseline, so it is a weak target. 
 coverage shows the real gaps, especially in `TcpConnection` (40%) and the error paths of
 `Socket`, `EpollPoller` and `TcpServer`.
 
+## Progress
+
+| After | `Buffer.cpp` lines | `Buffer.cpp` branches | Library branches |
+| --- | ---: | ---: | ---: |
+| baseline | 52 / 53 (98%) | 20 / 25 (80%) | 328 / 531 (61%) |
+| #4 Buffer tests (B-01..B-14) | 53 / 53 (100%) | 21 / 25 (84%) | 329 / 531 (62%) |
+
+The 4 `Buffer.cpp` branches still uncovered are exactly the `assert` failure sides on lines 20, 29,
+42 and 51, which are intentionally uncovered (test strategy, section 7). All 21 reachable branches
+of `Buffer.cpp` are now covered.
+
+### Mutation check for #4
+
+To confirm the new tests detect real defects, not just raise coverage, the grow-vs-move condition in
+`Buffer::make_space` was changed by hand from `<` to `<=` (an off-by-one):
+
+| Test suite | Result on the mutant |
+| --- | --- |
+| Baseline `buffer_test.cpp` (6 tests) | 6 passed: mutant survives |
+| After #4 (20 tests) | `b06_append_at_move_boundary_compacts` fails: mutant killed |
+
 ## Final
 
 _To be filled in by #11._
