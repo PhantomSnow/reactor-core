@@ -136,6 +136,7 @@ Existing tests are kept. New tests are added to `tests/buffer_test.cpp` and a ne
 | --- | --- | --- |
 | `Buffer.cpp` `assert(...)` (lines 20, 29, 42, 51) | assertion false | Precondition violations abort by design; covered by fuzzer invariants instead of unit tests |
 | `Timer.cpp` `create_timerfd` (lines 21–22) | `timerfd_create` fails | Requires exhausting file descriptors; system-call failure is out of scope |
+| `Timer.cpp` `delete` statements (lines 40, 71, 118) | pointer is null | Compiler-generated null check; the timer pointers are never null |
 
 ## 8. Techniques and tools
 

@@ -37,6 +37,32 @@ The 4 `Buffer.cpp` branches still uncovered are exactly the `assert` failure sid
 42 and 51, which are intentionally uncovered (test strategy, section 7). All 21 reachable branches
 of `Buffer.cpp` are now covered.
 
+### #5 TimerQueue tests (T-01..T-09)
+
+| `Timer.cpp` | Baseline | After #5 |
+| --- | ---: | ---: |
+| Lines | 85 / 89 (95%) | 87 / 89 (97%) |
+| Branches | 56 / 66 (84%) | 60 / 66 (90%) |
+| Reachable branches | 56 / 60 | 60 / 60 (100%) |
+
+The 6 uncovered `Timer.cpp` branches are: `timerfd_create` failure (lines 21-22, out of scope) and
+the null-pointer check the compiler generates for each `delete` (lines 40, 71, 118; the pointers are
+never null). See test strategy, section 7.
+
+### Run-to-run variation (found while measuring #5)
+
+Repeating the same measurement gives two different totals, because `tcp_server_test` takes
+timing-dependent paths through `TcpConnection` (63 or 50 of 154 branches). Seven runs each:
+
+| Suite | `TcpConnection.cpp` branches | Library branches (total of 531) |
+| --- | --- | --- |
+| baseline | 63 (4 runs) or 50 (3 runs) | 327-329 or 311-312 |
+| after #5 | 63 (3 runs) or 50 (4 runs) | 333 or 316 |
+
+`Buffer.cpp` and `Timer.cpp` numbers are identical in every run. Totals should therefore be compared
+within the same `TcpConnection` mode: the gain from #4 and #5 is +5 branches in both modes. The
+deterministic TcpConnection tests C-01..C-03 are meant to remove this variation.
+
 ### Mutation check for #4
 
 To confirm the new tests detect real defects, not just raise coverage, the grow-vs-move condition in
@@ -46,6 +72,13 @@ To confirm the new tests detect real defects, not just raise coverage, the grow-
 | --- | --- |
 | Baseline `buffer_test.cpp` (6 tests) | 6 passed: mutant survives |
 | After #4 (20 tests) | `b06_append_at_move_boundary_compacts` fails: mutant killed |
+
+### Mutation check for #5
+
+| Mutant | Original tests | After #5 |
+| --- | --- | --- |
+| `reset()` ignores `canceling_timers_` (cancelled repeating timer is rescheduled) | killed by `repeating_timer_can_cancel_itself` | killed by T-06 and T-09 |
+| `reset_timerfd` drops the 100 us minimum (a zero delay disarms the timerfd) | survives: 11 passed | killed: `timer_test` hangs and is stopped by the timeout |
 
 ## Final
 
