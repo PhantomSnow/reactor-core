@@ -34,6 +34,16 @@ Add one entry each time AI meaningfully shapes code, tests, seeds or docs.
 - **What you had to fix:** nothing in the tests; gcovr run from inside the repo left a stray `.gcov` file, so `*.gcov`/`*.gcda`/`*.gcno` were added to `.gitignore`
 - **Good prompt candidate for the report?** no
 
+### 2026-11-26 — TimerQueue tests T-01..T-09 (#5)
+
+- **Tool:** Claude
+- **Task:** Write the 9 TimerQueue test cases from the test strategy
+- **Prompt:** continued from #4 in the same session
+- **Output used:** `tests/timer_test.cpp`, `tests/CMakeLists.txt`
+- **Verification:** 9/9 pass, 3 runs each under ASan and UBSan; two mutants of `Timer.cpp` checked (both killed, one of them survives the original tests); coverage measured 7 times because results varied
+- **What you had to fix:** the EventLoop API cannot create timers with exactly the same expiry, so T-03 and T-06 drive a `TimerQueue` directly. Repeated measurement showed the library total varies between runs (TcpConnection timing), so single-run totals were replaced by per-mode comparisons
+- **Good prompt candidate for the report?** no
+
 ## LLM seed experiment (optional AI theme)
 
 | Harness | Seed set | Corpus size | Coverage @10 min | Coverage @60 min |
