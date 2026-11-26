@@ -17,6 +17,7 @@ endif()
 option(TINYNET_BUILD_TESTS "Build unit tests" ON)
 option(TINYNET_BUILD_EXAMPLES "Build example servers" ON)
 option(TINYNET_BUILD_BENCHMARKS "Build benchmark clients" ON)
+option(TINYNET_BUILD_FUZZERS "Build libFuzzer harnesses (requires Clang)" OFF)
 set(TINYNET_SANITIZER "" CACHE STRING "Enable a sanitizer: address, thread, or undefined")
 
 include(cmake/Dependencies.cmake)
@@ -58,4 +59,13 @@ endif()
 
 if(TINYNET_BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
+endif()
+
+if(TINYNET_BUILD_FUZZERS)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "TINYNET_BUILD_FUZZERS requires Clang (libFuzzer).")
+    endif()
+    # Instrument the library for coverage-guided fuzzing; the harness itself links libFuzzer.
+    target_compile_options(tinynet PRIVATE -fsanitize=fuzzer-no-link)
+    add_subdirectory(fuzz)
 endif()

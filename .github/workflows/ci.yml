@@ -95,3 +95,41 @@ jobs:
         with:
           name: coverage-report
           path: coverage/
+
+  fuzz:
+    name: fuzz (buffer, 60s)
+    runs-on: ubuntu-24.04
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install libFuzzer runtime
+        run: dpkg -s libclang-rt-18-dev >/dev/null 2>&1 || (sudo apt-get update -q && sudo apt-get install -y -q libclang-rt-18-dev)
+      - name: Lower mmap randomization for sanitizers
+        run: sudo sysctl vm.mmap_rnd_bits=28
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-O1 -g"
+          -DTINYNET_BUILD_FUZZERS=ON -DTINYNET_SANITIZER="address,undefined"
+          -DTINYNET_BUILD_TESTS=OFF -DTINYNET_BUILD_EXAMPLES=OFF -DTINYNET_BUILD_BENCHMARKS=OFF
+      - name: Build
+        run: cmake --build build -j --target buffer_fuzzer
+      - name: Fuzz for 60 seconds
+        run: |
+          mkdir -p fuzz-out/corpus
+          cp fuzz/corpus/buffer/* fuzz-out/corpus/
+          ./build/fuzz/buffer_fuzzer -max_total_time=60 -print_final_stats=1 \
+            -artifact_prefix=fuzz-out/ fuzz-out/corpus 2>&1 | tee fuzz-out/fuzz.log
+          {
+            echo "## Buffer fuzzer (60 s)"
+            echo '```'
+            grep -E '^stat::|DONE' fuzz-out/fuzz.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload crash reproducers
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes
+          path: fuzz-out/crash-*
